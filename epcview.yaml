@@ -17,19 +17,20 @@ nfs:
     host: 172.22.0.50
     port: 9090
 
-  # Add SMF/UPF/SGWC/SGWU here once epcview backends for them land —
-  # next iteration. Until then, polling these would just produce
-  # 'NotImplementedError' in the log. Keeping them out of the active
-  # config until the backend exists.
+  - name: smf-1
+    kind: smf
+    host: 172.22.0.52
+    port: 9090
+
+  - name: upf-1
+    kind: upf
+    host: 172.22.0.56
+    port: 9090
+
+  # SGW-C/SGW-U use the same Prometheus /metrics format as UPF; backend
+  # alias is on the to-do list. They're 4G-only and many deployments
+  # don't run them (5G NSA collapses SGW into SMF/UPF).
   #
-  # - name: smf-1
-  #   kind: smf
-  #   host: 172.22.0.51
-  #   port: 9090
-  # - name: upf-1
-  #   kind: upf
-  #   host: 172.22.0.52
-  #   port: 9090
   # - name: sgwc-1
   #   kind: sgwc
   #   host: 172.22.0.51

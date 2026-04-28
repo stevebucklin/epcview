@@ -49,6 +49,44 @@ class UeInfo:
 
 
 @dataclass
+class UpfStats:
+    """Snapshot of the gauges/counters a UPF /metrics scrape exposes."""
+    upf_name:               str
+    sessions_active:        int
+    pfcp_peers_active:      int
+    qos_flows_by_dnn:       Dict[str, int]
+    gtp_in_packets:         int
+    gtp_out_packets:        int
+    n4_estab_req:           int
+    n4_estab_fail:          int
+    n4_session_report:      int
+    n4_session_report_succ: int
+    rss_bytes:              int
+    open_fds:               int
+    raw:                    dict = field(default_factory=dict)
+
+
+@dataclass
+class PduSessionInfo:
+    """A single PDU/PDN session known to an SMF.
+
+    One record per (supi, ebi) — flattened from the SMF /pdu-info shape
+    so cross-NF correlation against MME UEs is straightforward.
+    """
+    supi:        str
+    ebi:         int            # EPS bearer ID (4G) / matches qfi for 5G default flow
+    apn:         str            # APN (4G) / DNN (5G)
+    ipv4:        Optional[str]
+    ipv6:        Optional[str]
+    snssai_sst:  Optional[int]  # 5G slice — None for pure 4G
+    snssai_sd:   Optional[str]
+    qos_flows:   List[dict]     # [{ebi/qfi, qci/5qi}, ...]
+    pdu_state:   str            # 'active' | 'inactive' | 'unknown'
+    smf_name:    str            # which SMF reports this session
+    raw:         dict = field(default_factory=dict)
+
+
+@dataclass
 class Snapshot:
     """One poll's worth of data from one NF.
 

@@ -57,6 +57,25 @@ class StateStore:
         # Future: union with AMF UEs (5G); de-dup by supi if both report
         return out
 
+    def all_sessions(self) -> list:
+        """All PDU/PDN sessions across every SMF currently up."""
+        out = []
+        for s in self.by_kind('smf'):
+            if s.up:
+                out.extend(s.data.get('sessions', []))
+        return out
+
+    def sessions_for_supi(self, supi: str) -> list:
+        return [s for s in self.all_sessions() if s.supi == supi]
+
+    def all_upf_stats(self) -> list:
+        """List of UpfStats for every UPF currently up."""
+        out = []
+        for s in self.by_kind('upf'):
+            if s.up and 'stats' in s.data:
+                out.append(s.data['stats'])
+        return out
+
 
 # module-level singleton
 STORE = StateStore()

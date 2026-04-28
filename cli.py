@@ -10,6 +10,7 @@ out.
 import asyncio
 from datetime import datetime
 
+import version
 from state import STORE
 
 
@@ -25,8 +26,10 @@ _CYAN    = '\033[96;1m'
 def _draw():
     print(_ANSI_CLEAR, end='')
     now = datetime.now().strftime('%H:%M:%S')
-    print(f'  {_CYAN}epcview{_RESET}  ({now})  '
-          f'— Ctrl-C to quit\n')
+    print(f'  {_CYAN}epcview{_RESET} v{version.__version__}  '
+          f'— Open5GS EPC/5GC live dashboard')
+    print(f'  {_DIM}{version.__author__} — {version.__release__}'
+          f'   ({now})   Ctrl-C to quit{_RESET}\n')
 
     # ── NF status row ──
     print(f'  {"NF":<22} {"KIND":<6} {"STATUS":<10} {"DETAIL"}')
@@ -39,6 +42,16 @@ def _draw():
                 e = len(snap.data.get('enbs', []))
                 u = len(snap.data.get('ues', []))
                 detail = f'{e} eNB(s)  {u} UE(s)  ({snap.data.get("mme_name","")})'
+            elif snap.nf_kind == 'smf':
+                sess = snap.data.get('sessions', [])
+                ues = len({s.supi for s in sess})
+                detail = f'{len(sess)} session(s)  {ues} UE(s)'
+            elif snap.nf_kind == 'upf':
+                st = snap.data.get('stats')
+                if st is not None:
+                    detail = (f'{st.sessions_active} PFCP sess  '
+                              f'{st.pfcp_peers_active} SMF peer(s)  '
+                              f'in/out {st.gtp_in_packets}/{st.gtp_out_packets} pkt')
         else:
             status = f'{_RED}● down{_RESET}  '
             detail = snap.error or ''
@@ -82,6 +95,50 @@ def _draw():
                   f'{state_col}{u.cm_state:<10}{_RESET}  '
                   f'{enb:>5}  {tai:<14}  {ambr:<14}  {apns}')
     print()
+
+    # ── PDU/PDN session table (SMF) ──
+    sessions = sorted(STORE.all_sessions(), key=lambda s: (s.supi, s.ebi))
+    print(f'  {_CYAN}Sessions{_RESET} ({len(sessions)})')
+    if sessions:
+        print(f'    {"SUPI":<17}  {"EBI":>3}  {"APN/DNN":<14}  '
+              f'{"IPv4":<15}  {"S-NSSAI":<10}  {"QCI/5QI":<7}  {"STATE":<8}  {"SMF"}')
+        print(f'    {"----":<17}  {"---":>3}  {"-------":<14}  '
+              f'{"----":<15}  {"-------":<10}  {"-------":<7}  {"-----":<8}  {"---"}')
+        for s in sessions:
+            ipv4 = s.ipv4 or '-'
+            if s.snssai_sst is not None:
+                snssai = f'{s.snssai_sst}/{s.snssai_sd or "-"}'
+            else:
+                snssai = '-'
+            qcis = ','.join(str(q.get('qci', q.get('5qi', '?')))
+                             for q in s.qos_flows) or '-'
+            state_col = (_GREEN if s.pdu_state == 'active'
+                         else _YELLOW if s.pdu_state == 'unknown' else _DIM)
+            print(f'    {s.supi:<17}  {s.ebi:>3}  {s.apn:<14}  '
+                  f'{ipv4:<15}  {snssai:<10}  {qcis:<7}  '
+                  f'{state_col}{s.pdu_state:<8}{_RESET}  '
+                  f'{_DIM}{s.smf_name}{_RESET}')
+    print()
+
+    # ── UPF stats ──
+    upfs = sorted(STORE.all_upf_stats(), key=lambda s: s.upf_name)
+    if upfs:
+        print(f'  {_CYAN}UPFs{_RESET} ({len(upfs)})')
+        print(f'    {"NAME":<10}  {"SESS":>4}  {"PEERS":>5}  {"GTP IN":>10}  '
+              f'{"GTP OUT":>10}  {"N4 ESTAB":>9}  {"N4 FAIL":>7}  '
+              f'{"RSS":>7}  {"FDS":>4}  {"QOS BY DNN"}')
+        print(f'    {"----":<10}  {"----":>4}  {"-----":>5}  {"------":>10}  '
+              f'{"-------":>10}  {"--------":>9}  {"-------":>7}  '
+              f'{"---":>7}  {"---":>4}  {"----------"}')
+        for st in upfs:
+            qos = ', '.join(f'{d}={n}' for d, n in sorted(st.qos_flows_by_dnn.items())) or '-'
+            rss_mb = st.rss_bytes // (1024 * 1024)
+            print(f'    {st.upf_name:<10}  {st.sessions_active:>4}  '
+                  f'{st.pfcp_peers_active:>5}  {st.gtp_in_packets:>10}  '
+                  f'{st.gtp_out_packets:>10}  {st.n4_estab_req:>9}  '
+                  f'{st.n4_estab_fail:>7}  {rss_mb:>5}MB  '
+                  f'{st.open_fds:>4}  {qos}')
+        print()
 
 
 async def render_loop(refresh_seconds: float, stop: asyncio.Event):

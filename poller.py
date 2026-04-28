@@ -16,6 +16,8 @@ import aiohttp
 from config import EpcviewConfig, NfConfig
 from nfs import NfBackend
 from nfs.mme import MmeBackend
+from nfs.smf import SmfBackend
+from nfs.upf import UpfBackend
 from state import StateStore
 
 log = logging.getLogger(__name__)
@@ -24,7 +26,11 @@ log = logging.getLogger(__name__)
 def _make_backend(nf: NfConfig, timeout: float) -> NfBackend:
     if nf.kind == 'mme':
         return MmeBackend(nf.name, nf.kind, nf.base_url, timeout)
-    # Future: smf, upf, sgwc, sgwu, amf
+    if nf.kind == 'smf':
+        return SmfBackend(nf.name, nf.kind, nf.base_url, timeout)
+    if nf.kind == 'upf':
+        return UpfBackend(nf.name, nf.kind, nf.base_url, timeout)
+    # Future: sgwc, sgwu, amf
     raise NotImplementedError(f'No backend yet for kind={nf.kind}')
 
 
