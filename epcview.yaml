@@ -1,0 +1,45 @@
+# epcview — Open5GS EPC/5GC live dashboard configuration.
+#
+# `nfs` lists Network Functions to poll. For 4G you list everything manually.
+# For 5G, list at minimum the NRF; epcview will auto-discover the rest.
+
+global:
+  refresh_seconds:  1            # how often to poll all NFs
+  http_timeout:     2            # seconds — fail an NF as 'down' after this
+  history_size:     2000         # in-memory event ring buffer
+  history_db:                    # optional SQLite path for persistent history
+                                 # e.g. "~/.local/state/epcview/history.db"
+
+# 4G EPC — manual list. `name` is your label; `kind` selects the backend.
+nfs:
+  - name: mme-1
+    kind: mme
+    host: 192.168.1.10
+    port: 9090
+
+  - name: smf-1
+    kind: smf
+    host: 192.168.1.11
+    port: 9090
+
+  - name: upf-1
+    kind: upf
+    host: 192.168.1.12
+    port: 9090
+
+  - name: sgwc-1
+    kind: sgwc
+    host: 192.168.1.13
+    port: 9090
+
+  - name: sgwu-1
+    kind: sgwu
+    host: 192.168.1.14
+    port: 9090
+
+# 5G — only the NRF is required. epcview discovers AMF/SMF/UPF/etc via NRF SBI.
+# Comment this section out for 4G-only deployments.
+# nrf:
+#   host: 192.168.1.20
+#   port: 7777
+#   discover_kinds: [amf, smf, upf, ausf, udm, udr, pcf]
