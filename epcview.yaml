@@ -14,28 +14,30 @@ global:
 nfs:
   - name: mme-1
     kind: mme
-    host: 192.168.1.10
+    host: 172.22.0.50
     port: 9090
 
-  - name: smf-1
-    kind: smf
-    host: 192.168.1.11
-    port: 9090
-
-  - name: upf-1
-    kind: upf
-    host: 192.168.1.12
-    port: 9090
-
-  - name: sgwc-1
-    kind: sgwc
-    host: 192.168.1.13
-    port: 9090
-
-  - name: sgwu-1
-    kind: sgwu
-    host: 192.168.1.14
-    port: 9090
+  # Add SMF/UPF/SGWC/SGWU here once epcview backends for them land —
+  # next iteration. Until then, polling these would just produce
+  # 'NotImplementedError' in the log. Keeping them out of the active
+  # config until the backend exists.
+  #
+  # - name: smf-1
+  #   kind: smf
+  #   host: 172.22.0.51
+  #   port: 9090
+  # - name: upf-1
+  #   kind: upf
+  #   host: 172.22.0.52
+  #   port: 9090
+  # - name: sgwc-1
+  #   kind: sgwc
+  #   host: 172.22.0.51
+  #   port: 9090
+  # - name: sgwu-1
+  #   kind: sgwu
+  #   host: 172.22.0.52
+  #   port: 9090
 
 # 5G — only the NRF is required. epcview discovers AMF/SMF/UPF/etc via NRF SBI.
 # Comment this section out for 4G-only deployments.

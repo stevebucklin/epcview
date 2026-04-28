@@ -7,10 +7,14 @@ Usage:
 
 import argparse
 import asyncio
+import signal
 import sys
 
 import config as cfg
 import version
+from cli import render_loop
+from poller import Poller
+from state import STORE
 
 
 def _banner(conf: cfg.EpcviewConfig):
@@ -28,13 +32,30 @@ async def _main(config_path: str):
     conf = cfg.load(config_path)
     _banner(conf)
 
-    # The poller, state store, and CLI loop live in upcoming files. For the
-    # scaffolding milestone we just verify config loads and print the NF list.
-    print('  Configured NFs:')
-    for nf in conf.nfs:
-        print(f'    {nf.name:<10} {nf.kind:<6} {nf.base_url}')
-    print()
-    print('  (Polling/UI not yet implemented — scaffold only.)')
+    if not conf.nfs:
+        print('  ! No NFs configured. Edit epcview.yaml.')
+        return
+
+    stop = asyncio.Event()
+
+    # Ctrl-C handler — sets stop event, lets tasks unwind cleanly
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+
+    poller = Poller(conf, STORE)
+
+    poller_task  = asyncio.create_task(poller.run(),       name='poller')
+    render_task  = asyncio.create_task(
+        render_loop(conf.globals.refresh_seconds, stop),
+        name='render'
+    )
+
+    await stop.wait()
+
+    poller.stop()
+    await asyncio.gather(poller_task, render_task, return_exceptions=True)
+    print('\n  Stopped.\n')
 
 
 def parse_args():
