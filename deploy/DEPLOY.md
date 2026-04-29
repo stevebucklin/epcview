@@ -5,79 +5,54 @@ once per second and renders a live unified view. Designed to run on any
 host that has TCP reachability to your NF metrics ports — typically a
 laptop on the same VLAN as the core, or a jumphost.
 
-This document covers a fresh install on a Linux laptop / workstation.
-macOS works the same way; Windows via WSL2.
-
-## 1. Requirements
-
-- Python 3.8+ (3.10 or newer recommended)
-- `pip` and the `venv` module
-- TCP reachability from the host to every NF's metrics port (default
-  9090) — verify with `curl -sf http://<nf>:9090/metrics` or
-  `/enb-info`/`/pdu-info` before bothering with epcview
-
-That's the whole list. epcview pulls in two pure-Python deps
-(`aiohttp`, `PyYAML`) and uses no native libraries.
-
-## 2. Install
-
-Unpack the tarball wherever you keep tooling. `~/opt/epcview` works
-well — the runtime tree is self-contained and doesn't require root.
+## Install
 
 ```bash
-mkdir -p ~/opt && cd ~/opt
-tar -xzf /path/to/epcview-0.1.0.tar.gz
+tar -xzf epcview-0.1.0.tar.gz
 cd epcview-0.1.0
+sudo ./deploy/install.sh
 ```
 
-Create a virtualenv and install dependencies into it. Keeping deps out
-of system site-packages avoids version churn the next time you upgrade
-the OS.
+That's it. The installer:
+
+- Apt-installs `python3`, `python3-venv`, `python3-pip` if missing.
+- Wipes any previous `/opt/epcview-*` (clean upgrade).
+- Stages the source tree under `/opt/epcview-<version>`.
+- Builds a venv there and installs `aiohttp` + `PyYAML`.
+- Drops a launcher at `/usr/local/bin/epcview` so any user can run
+  `epcview` without sudo.
+- Drops `epcview-uninstall` at `/usr/local/sbin/`.
+- Seeds `/etc/epcview/epcview.yaml` with the bundled default (only if
+  not already present — re-installs preserve your edits). The latest
+  bundled default is always available as
+  `/etc/epcview/epcview.yaml.example`.
+
+The install needs root (writes to `/opt`, `/usr/local`, `/etc`); the
+runtime does not — `epcview` runs as the invoking user.
+
+Requires apt-based Linux (Ubuntu / Debian / Mint). On other distros
+install `python3`, the venv module, and pip by hand first; the installer
+will skip its own apt step.
+
+## Run
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+epcview
 ```
 
-Quick smoke test (no NFs configured yet — should just print the banner
-and exit):
+Press Ctrl-C to quit.
 
-```bash
-python3 main.py
-```
+## Configure
 
-You should see:
+Two ways, in order of precedence:
 
-```
-  epcview — Open5GS EPC/5GC dashboard
-  Steve Bucklin — Version 0.1.0 — 28 April 2026
-  Polling 0 NF(s) every 1s  (timeout 2s)
+1. **Per-user** — drop a YAML at `~/.config/epcview/epcview.yaml`. Use
+   when one machine serves several operators with different views.
+2. **System default** — edit `/etc/epcview/epcview.yaml`. This is what
+   the installer seeded; survives upgrades.
 
-  ! No NFs configured. Edit epcview.yaml.
-```
-
-If the banner shows but you get import errors, the venv didn't activate
-— re-run `. .venv/bin/activate` and re-install.
-
-## 3. Configure
-
-The default config search order is:
-
-1. `--config <path>`  (CLI flag, overrides everything)
-2. `./epcview.yaml`   (the bundled default)
-3. `~/.config/epcview/epcview.yaml`
-4. `/etc/epcview/epcview.yaml`
-
-Per-user is the cleanest pattern on a laptop:
-
-```bash
-mkdir -p ~/.config/epcview
-cp epcview.yaml ~/.config/epcview/epcview.yaml
-```
-
-Edit the file — only the `nfs:` list needs your attention. One entry
-per NF you want to watch:
+Only the `nfs:` list usually needs your attention. One entry per NF you
+want to watch:
 
 ```yaml
 nfs:
@@ -106,62 +81,18 @@ nfs:
 | `history_size`     | `2000`  | in-memory event ring buffer length      |
 | `history_db`       | `null`  | optional path for persistent history    |
 
-## 4. Run
-
-From the install directory, with the venv active:
+## Uninstall
 
 ```bash
-python3 main.py
+sudo epcview-uninstall
 ```
 
-For convenience, drop a small launcher into `~/.local/bin`:
+Removes every `/opt/epcview-*`, the launcher, the uninstaller itself,
+`/etc/epcview/`, and the invoking user's `~/.config/epcview/` plus any
+`epcview.service` user unit. Other users' per-user configs (if any) are
+flagged but not auto-removed — clean those by hand.
 
-```bash
-cat > ~/.local/bin/epcview <<'EOF'
-#!/usr/bin/env bash
-set -e
-EPCVIEW_DIR="$HOME/opt/epcview-0.1.0"
-exec "$EPCVIEW_DIR/.venv/bin/python3" "$EPCVIEW_DIR/main.py" "$@"
-EOF
-chmod +x ~/.local/bin/epcview
-```
-
-You can then run `epcview` from anywhere. `Ctrl-C` exits cleanly.
-
-## 5. Optional: run as a systemd --user service
-
-Useful if you want it humming in a tmux pane the moment you log in.
-
-```ini
-# ~/.config/systemd/user/epcview.service
-[Unit]
-Description=epcview — Open5GS EPC/5GC live dashboard
-After=network-online.target
-
-[Service]
-Type=simple
-ExecStart=%h/.local/bin/epcview
-Restart=on-failure
-RestartSec=3
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=default.target
-```
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now epcview
-journalctl --user -u epcview -f
-```
-
-The service is mostly useful as a "always on" background poller that
-populates an on-disk history (`history_db:` in the YAML) so the
-interactive view starts with context. Foreground use from a terminal is
-the usual mode.
-
-## 6. Troubleshooting
+## Troubleshooting
 
 **`● down` next to an NF** — the host:port isn't reachable, or the NF
 isn't exposing its metrics. Check from the same host with `curl`:
@@ -179,19 +110,37 @@ upgrade to a build that includes the custom JSON metrics.
 `http_timeout` in `global:`.
 
 **Empty Sessions table while MME shows UEs** — UEs that are EMM
-registered but have no active PDN won't show on the SMF. This is also
-normal right after an SMF restart until the UEs re-establish their
-sessions.
+registered but have no active PDN won't show on the SMF. Also normal
+right after an SMF restart, until UEs re-establish their sessions.
 
 **Mismatched IMSIs between MME and SMF** — real divergence in core
 state. Worth investigating in your EPC, not an epcview issue.
 
-## 7. Uninstall
+## Optional: systemd --user service
+
+If you want it humming in the background as you log in. Drop in
+`~/.config/systemd/user/epcview.service`:
+
+```ini
+[Unit]
+Description=epcview — Open5GS EPC/5GC live dashboard
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/epcview
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+```
 
 ```bash
-rm -rf ~/opt/epcview-*
-rm -rf ~/.config/epcview
-rm -f  ~/.local/bin/epcview
-systemctl --user disable --now epcview 2>/dev/null
-rm -f  ~/.config/systemd/user/epcview.service
+systemctl --user daemon-reload
+systemctl --user enable --now epcview
+journalctl --user -u epcview -f
 ```
+
+Mostly useful with `history_db:` set in the YAML so the interactive
+view starts with context.
