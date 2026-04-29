@@ -10,7 +10,9 @@ venv/
 *.bak
 *.db
 recent.json
-epcview-deploy.tar.gz
+
+# Release tarballs built by deploy/ — built locally, not committed
+deploy/epcview-*.tar.gz
 
 # Editor / OS
 .idea/
