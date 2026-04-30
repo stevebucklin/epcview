@@ -40,8 +40,13 @@ def _draw():
             detail = ''
             if snap.nf_kind == 'mme':
                 e = len(snap.data.get('enbs', []))
-                u = len(snap.data.get('ues', []))
-                detail = f'{e} eNB(s)  {u} UE(s)  ({snap.data.get("mme_name","")})'
+                ue_list = snap.data.get('ues', [])
+                attached = sum(1 for u in ue_list if not u.is_auth_pending)
+                pending  = len(ue_list) - attached
+                ue_str = f'{attached} UE(s)'
+                if pending:
+                    ue_str += f' (+{pending} auth-pending)'
+                detail = f'{e} eNB(s)  {ue_str}  ({snap.data.get("mme_name","")})'
             elif snap.nf_kind == 'smf':
                 sess = snap.data.get('sessions', [])
                 ues = len({s.supi for s in sess})
@@ -77,14 +82,24 @@ def _draw():
     print()
 
     # ── UE table ──
-    ues = sorted(STORE.all_ues(), key=lambda u: u.supi)
-    print(f'  {_CYAN}UEs{_RESET} ({len(ues)})')
-    if ues:
+    # Split attached UEs from auth-pending (HSS hasn't returned subscriber
+    # data → AMBR=0, no PDNs). Render attached ones in detail; collapse
+    # auth-pending to a single dim summary so a flapping HSS link doesn't
+    # bury the operator under hundreds of phantom rows.
+    all_ues = sorted(STORE.all_ues(), key=lambda u: u.supi)
+    attached = [u for u in all_ues if not u.is_auth_pending]
+    pending  = [u for u in all_ues if u.is_auth_pending]
+    if pending:
+        title = f'{len(attached)} attached, {len(pending)} auth-pending'
+    else:
+        title = f'{len(attached)}'
+    print(f'  {_CYAN}UEs{_RESET} ({title})')
+    if attached:
         print(f'    {"SUPI/IMSI":<17}  {"DOMAIN":<6}  {"STATE":<10}  '
               f'{"ENB":>5}  {"TAI":<14}  {"AMBR↓/↑":<14}  {"APNs"}')
         print(f'    {"---------":<17}  {"------":<6}  {"-----":<10}  '
               f'{"---":>5}  {"---":<14}  {"-------":<14}  {"----"}')
-        for u in ues:
+        for u in attached:
             state_col = (_GREEN if u.cm_state == 'connected'
                          else _YELLOW if u.cm_state == 'idle' else _DIM)
             enb = str(u.serving_enb) if u.serving_enb is not None else '-'
@@ -94,6 +109,14 @@ def _draw():
             print(f'    {u.supi:<17}  {u.domain:<6}  '
                   f'{state_col}{u.cm_state:<10}{_RESET}  '
                   f'{enb:>5}  {tai:<14}  {ambr:<14}  {apns}')
+    if pending:
+        # Show first few IMSIs as a hint (helpful for spotting one
+        # specific UE in the pool); rest collapsed.
+        sample = ', '.join((u.supi or '<no IMSI>') for u in pending[:5])
+        more   = f' +{len(pending)-5} more' if len(pending) > 5 else ''
+        print(f'    {_DIM}{_YELLOW}↳ {len(pending)} auth-pending'
+              f' (HSS may be unreachable):{_RESET} '
+              f'{_DIM}{sample}{more}{_RESET}')
     print()
 
     # ── PDU/PDN session table (SMF) ──

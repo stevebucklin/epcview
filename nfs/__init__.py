@@ -47,6 +47,20 @@ class UeInfo:
     mme_name:       str            # which MME owns this UE
     raw:            dict = field(default_factory=dict)
 
+    @property
+    def is_auth_pending(self) -> bool:
+        """True if this UE is stuck in the MME's pre-auth state.
+
+        A real attached UE has subscriber data from HSS (non-zero AMBR)
+        and at least one PDN; a UE the MME has accepted into S1 but
+        hasn't authenticated has neither. When the HSS / S6a peer is
+        unreachable these accumulate — they look 'connected' to the MME
+        but are operationally ghosts.
+        """
+        return (self.ambr_dl_bps == 0
+                and self.ambr_ul_bps == 0
+                and not self.pdns)
+
 
 @dataclass
 class UpfStats:

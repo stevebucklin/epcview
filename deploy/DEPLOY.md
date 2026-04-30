@@ -8,8 +8,8 @@ laptop on the same VLAN as the core, or a jumphost.
 ## Install
 
 ```bash
-tar -xzf epcview-0.1.0.tar.gz
-cd epcview-0.1.0
+tar -xzf epcview-0.1.1.tar.gz
+cd epcview-0.1.1
 sudo ./deploy/install.sh
 ```
 
